@@ -1,11 +1,28 @@
 mod balances;
 mod system;
 
+mod types {
+    pub type AccountId = String;
+    pub type Balance = u128;
+    pub type BlockNumber = u32;
+    pub type Nonce = u32;
+}
+
+impl system::Config for Runtime {
+    type AccountId = types::AccountId;
+    type BlockNumber = types::BlockNumber;
+    type Nonce = types::Nonce;
+}
+
+impl balances::Config for Runtime {
+    type Balance = types::Balance;
+}
+
 /// This is our runtime, it allows us to interact with all logic in the system.
 #[derive(Debug)]
 pub struct Runtime {
-    pub system: system::Pallet,
-    pub balances: balances::Pallet,
+    pub system: system::Pallet<Self>,
+    pub balances: balances::Pallet<Self>,
 }
 
 impl Runtime {

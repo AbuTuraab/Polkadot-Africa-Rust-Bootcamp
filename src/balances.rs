@@ -1,17 +1,16 @@
+use num::traits::{CheckedAdd, CheckedSub, Zero};
 use std::collections::BTreeMap;
-use num::traits::{CheckedSub, CheckedAdd, Zero};
 
 pub trait Config: crate::system::Config {
-    type Balance: CheckedAdd + CheckedSub + Zero + Copy;  
+    type Balance: CheckedAdd + CheckedSub + Zero + Copy;
 }
 
-
 #[derive(Debug)]
-pub struct Pallet<T:Config> {
+pub struct Pallet<T: Config> {
     balances: BTreeMap<T::AccountId, T::Balance>,
 }
 
-impl <T:Config> Pallet<T>{
+impl<T: Config> Pallet<T> {
     pub fn new() -> Self {
         Self {
             balances: BTreeMap::new(),
@@ -46,6 +45,30 @@ impl <T:Config> Pallet<T>{
     }
 }
 
+// An enum for calls available in the balance pallet
+pub enum Call<T: Config> {
+    Transfer {
+        to: T::AccountId,
+        amount: T::Balance,
+    },
+}
+
+impl<T: Config> crate::support::Dispatch for Pallet<T> {
+    type Call = Call<T>;
+    type Caller = T::AccountId;
+
+    fn dispatch(
+        &mut self,
+        caller: Self::Caller,
+        call: Self::Call,
+    ) -> crate::support::DispatchResult {
+        match call {
+            Call::Transfer { to, amount } => self.transfer(caller, to, amount)?,
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     struct TestConfig;
@@ -58,7 +81,6 @@ mod tests {
 
     impl super::Config for TestConfig {
         type Balance = u32;
-        
     }
     #[test]
     fn init_balances() {

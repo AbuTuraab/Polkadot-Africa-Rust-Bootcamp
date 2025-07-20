@@ -4,6 +4,7 @@ use types::{AccountId, Balance};
 mod balances;
 mod support;
 mod system;
+mod proof_of_existence;
 
 mod types {
     pub type AccountId = String;
@@ -13,11 +14,13 @@ mod types {
     pub type Extrinsic = crate::support::Extrinsic<AccountId, crate::RuntimeCall>;
     pub type Header = crate::support::Header<BlockNumber>;
     pub type Block = crate::support::Block<Header, Extrinsic>;
+    pub type Content = String;
 }
 
 // This is an enum that contains all the calls available to our runtime
 pub enum RuntimeCall {
     Balances(balances::Call<Runtime>),
+    ProofOfExistence(proof_of_existence::Call<Runtime>),
 }
 
 impl system::Config for Runtime {
@@ -30,11 +33,16 @@ impl balances::Config for Runtime {
     type Balance = types::Balance;
 }
 
+impl proof_of_existence::Config for Runtime {
+    type Content = types::Content;
+}
+
 /// This is our runtime, it allows us to interact with all logic in the system.
 #[derive(Debug)]
 pub struct Runtime {
     pub system: system::Pallet<Self>,
     pub balances: balances::Pallet<Self>,
+    pub proof_of_existence: proof_of_existence::Pallet<Self>
 }
 
 impl Runtime {
@@ -43,6 +51,7 @@ impl Runtime {
         Runtime {
             system: system::Pallet::new(),
             balances: balances::Pallet::new(),
+            proof_of_existence: proof_of_existence::Pallet::new(),
         }
     }
 
@@ -81,7 +90,10 @@ impl crate::support::Dispatch for Runtime {
         match call {
             RuntimeCall::Balances(call) => {
                 self.balances.dispatch(caller, call)?;
-            }
+            },
+            RuntimeCall::ProofOfExistence(call) => {
+                self.proof_of_existence.dispatch(caller, call)?;
+            },
         }
 
         Ok(())
@@ -131,9 +143,8 @@ fn main() {
         extrinsics: vec![
             support::Extrinsic {
                 caller: cheryl.clone(),
-                call: RuntimeCall::Balances(balances::Call::Transfer {
-                    to: femi.clone(),
-                    amount: 100,
+                call: RuntimeCall::ProofOfExistence(proof_of_existence::Call::CreateClaim{
+                    claim: "Hello world".to_string(),
                 }),
             },
             support::Extrinsic {

@@ -1,3 +1,4 @@
+use balances::function;
 use support::Dispatch;
 use types::{AccountId, Balance};
 

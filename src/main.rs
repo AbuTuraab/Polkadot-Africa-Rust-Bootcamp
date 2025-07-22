@@ -1,11 +1,13 @@
-use support::Dispatch;
-use types::{AccountId, Balance};
-
 mod balances;
+mod proof_of_existence;
 mod support;
 mod system;
-mod proof_of_existence;
 
+use crate::support::Dispatch;
+
+// These are the concrete types we will use in our simple state machine.
+// Modules are configured for these types directly, and they satisfy all of our
+// trait requirements.
 mod types {
     pub type AccountId = String;
     pub type Balance = u128;
@@ -17,10 +19,14 @@ mod types {
     pub type Content = String;
 }
 
-// This is an enum that contains all the calls available to our runtime
-pub enum RuntimeCall {
-    Balances(balances::Call<Runtime>),
-    ProofOfExistence(proof_of_existence::Call<Runtime>),
+// This is our main Runtime.
+// It accumulates all of the different pallets we want to use.
+#[derive(Debug)]
+#[macros::runtime]
+pub struct Runtime {
+    system: system::Pallet<Self>,
+    balances: balances::Pallet<Self>,
+    proof_of_existence: proof_of_existence::Pallet<Self>,
 }
 
 impl system::Config for Runtime {
@@ -37,141 +43,78 @@ impl proof_of_existence::Config for Runtime {
     type Content = types::Content;
 }
 
-/// This is our runtime, it allows us to interact with all logic in the system.
-#[derive(Debug)]
-pub struct Runtime {
-    pub system: system::Pallet<Self>,
-    pub balances: balances::Pallet<Self>,
-    pub proof_of_existence: proof_of_existence::Pallet<Self>
-}
-
-impl Runtime {
-    // Create a new instance of the runtime
-    fn new() -> Self {
-        Runtime {
-            system: system::Pallet::new(),
-            balances: balances::Pallet::new(),
-            proof_of_existence: proof_of_existence::Pallet::new(),
-        }
-    }
-
-    fn execute_block(&mut self, block: types::Block) -> support::DispatchResult {
-        self.system.inc_block_number();
-
-        if self.system.block_number() != block.header.block_number {
-            return Err("block number does not match what is expected");
-        }
-
-        // (index, item)
-        for (i, support::Extrinsic { caller, call }) in block.extrinsics.into_iter().enumerate() {
-            self.system.inc_nonce(&caller);
-            // call the dispatch function here
-            let _res = self.dispatch(caller, call).map_err(|e| {
-                // display the error
-                // extrinsic number
-                // block number
-                eprintln!(
-                    "Extrinsic Error\n\t Block Number: {}\n\t Extrinsic Number: {}\n\tError: {}",
-                    block.header.block_number, i, e
-                )
-            });
-        }
-
-        Ok(())
-    }
-}
-
-impl crate::support::Dispatch for Runtime {
-    type Caller = <Runtime as system::Config>::AccountId;
-    type Call = RuntimeCall;
-
-    // This is a dispatch call on behalf of the caller
-    fn dispatch(&mut self, caller: Self::Caller, call: Self::Call) -> support::DispatchResult {
-        match call {
-            RuntimeCall::Balances(call) => {
-                self.balances.dispatch(caller, call)?;
-            },
-            RuntimeCall::ProofOfExistence(call) => {
-                self.proof_of_existence.dispatch(caller, call)?;
-            },
-        }
-
-        Ok(())
-    }
-}
-
 fn main() {
+    // Create a new instance of the Runtime.
+    // It will instantiate with it all the modules it uses.
     let mut runtime = Runtime::new();
+    let alice = "alice".to_string();
+    let bob = "bob".to_string();
+    let charlie = "charlie".to_string();
 
-    // Users
-    let femi = String::from("Femi");
-    let temi = String::from("temi");
-    let cheryl = String::from("cheryl");
-    let nathaniel = String::from("nathaniel");
-    let faith = String::from("faith");
+    // Initialize the system with some initial balance.
+    runtime.balances.set_balance(&alice, 100);
 
-    // give some money - GENSIS Block
-    runtime.balances.set_balance(&cheryl, 1000);
-
-    // Create block 1
+    // Here are the extrinsics in our block.
+    // You can add or remove these based on the modules and calls you have set up.
     let block_1 = types::Block {
         header: support::Header { block_number: 1 },
         extrinsics: vec![
             support::Extrinsic {
-                caller: cheryl.clone(),
-                call: RuntimeCall::Balances(balances::Call::Transfer {
-                    to: faith.clone(),
-                    amount: 50,
+                caller: alice.clone(),
+                call: RuntimeCall::balances(balances::Call::transfer {
+                    to: bob.clone(),
+                    amount: 30,
                 }),
             },
             support::Extrinsic {
-                caller: cheryl.clone(),
-                call: RuntimeCall::Balances(balances::Call::Transfer {
-                    to: nathaniel.clone(),
-                    amount: 70,
-                }),
+                caller: alice.clone(),
+                call: RuntimeCall::balances(balances::Call::transfer { to: charlie, amount: 20 }),
             },
         ],
     };
 
-    // execute block one
-    runtime.execute_block(block_1).expect("invalid block");
-
-    // Create block 2
     let block_2 = types::Block {
         header: support::Header { block_number: 2 },
         extrinsics: vec![
             support::Extrinsic {
-                caller: cheryl.clone(),
-                call: RuntimeCall::ProofOfExistence(proof_of_existence::Call::CreateClaim{
-                    claim: "Hello world".to_string(),
+                caller: alice.clone(),
+                call: RuntimeCall::proof_of_existence(proof_of_existence::Call::create_claim {
+                    claim: "Hello, world!".to_string(),
                 }),
             },
             support::Extrinsic {
-                caller: femi.clone(),
-                call: RuntimeCall::Balances(balances::Call::Transfer {
-                    to: temi.clone(),
-                    amount: 100,
+                caller: bob.clone(),
+                call: RuntimeCall::proof_of_existence(proof_of_existence::Call::create_claim {
+                    claim: "Hello, world!".to_string(),
                 }),
             },
         ],
     };
 
-    runtime.execute_block(block_2).expect("invalid block");
-
-    // block 3 : should fail
     let block_3 = types::Block {
         header: support::Header { block_number: 3 },
-        extrinsics: vec![support::Extrinsic {
-            caller: cheryl.clone(),
-            call: RuntimeCall::Balances(balances::Call::Transfer {
-                to: nathaniel.clone(),
-                amount: 1200,
-            }),
-        }],
+        extrinsics: vec![
+            support::Extrinsic {
+                caller: alice,
+                call: RuntimeCall::proof_of_existence(proof_of_existence::Call::revoke_claim {
+                    claim: "Hello, world!".to_string(),
+                }),
+            },
+            support::Extrinsic {
+                caller: bob,
+                call: RuntimeCall::proof_of_existence(proof_of_existence::Call::create_claim {
+                    claim: "Hello, world!".to_string(),
+                }),
+            },
+        ],
     };
 
+    // Execute the extrinsics which make up our blocks.
+    // If there are any errors, our system panics, since we should not execute invalid blocks.
+    runtime.execute_block(block_1).expect("invalid block");
+    runtime.execute_block(block_2).expect("invalid block");
     runtime.execute_block(block_3).expect("invalid block");
 
-    println!("{:#?}", runtime);
+    // Simply print the debug format of our runtime state.
+    println!("{runtime:#?}");
 }
